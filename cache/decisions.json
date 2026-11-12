@@ -1,86 +1,175 @@
 {
- "54e86f7f12e05f9a9d0a77c4": {
-  "items": [
-   {
-    "sku": "KETTLE",
-    "eligible": true,
-    "rule": "R1",
-    "complaint_quote": "the kettle showed up cracked",
-    "why": "Arrived damaged and reported within fourteen days."
-   },
-   {
-    "sku": "MUGS",
-    "eligible": false,
-    "rule": "R3",
-    "complaint_quote": "mugs aren't really my style now that I've used them a few times",
-    "why": "Opened and used change-of-mind items are ineligible."
-   },
-   {
-    "sku": "TEA",
-    "eligible": false,
-    "rule": "R2",
-    "complaint_quote": "",
-    "why": "No problem reported with this item."
-   }
-  ],
-  "needs_human": false,
-  "question": "",
-  "reply": "We are so sorry your kettle arrived cracked! We can issue a refund for the damaged kettle. However, since the mugs have been used, we unfortunately cannot accept a return for them, and no issues were reported for the tea."
+ "088a4c376dc12496b8fb0b9b": {
+  "raw": {
+   "items": [
+    {
+     "sku": "KETTLE",
+     "eligible": true,
+     "rule": "R1",
+     "complaint_quote": "the kettle showed up cracked",
+     "why": "Arrived damaged and reported within fourteen days."
+    },
+    {
+     "sku": "MUGS",
+     "eligible": false,
+     "rule": "R3",
+     "complient_quote": "",
+     "complaint_quote": "mugs aren't really my style now that I've used them",
+     "why": "Change-of-mind return for used items is ineligible."
+    },
+    {
+     "sku": "TEA",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "",
+     "why": "Arrived in good condition and being kept."
+    }
+   ],
+   "needs_human": false,
+   "question": "",
+   "reply": "We are happy to refund your cracked kettle under our damage policy! Unfortunately, we cannot refund the mugs since they were used and are a change-of-mind return, nor the tea as it was not reported with an issue."
+  },
+  "model": "gemini-3.5-flash-lite"
  },
- "e4715f1e96a7bb9a3202424d": {
-  "items": [
-   {
-    "sku": "KETTLE",
-    "eligible": true,
-    "rule": "R1",
-    "complaint_quote": "The glass kettle has a crack down the side.",
-    "why": "Reported damaged upon arrival within allowed timeframe."
-   },
-   {
-    "sku": "MUGS",
-    "eligible": false,
-    "rule": "R3",
-    "complaint_quote": "The mugs and the tea are fine, we love them.",
-    "why": "Item is undamaged and not being returned."
-   },
-   {
-    "sku": "TEA",
-    "eligible": false,
-    "rule": "R3",
-    "complaint_quote": "The mugs and the tea are fine, we love them.",
-    "why": "Item is undamaged and not being returned."
-   }
-  ],
-  "needs_human": false,
-  "question": "",
-  "reply": "Hello! We are so glad you love the mugs and tea, but we are very sorry about the cracked kettle. We have approved a refund for the glass kettle under our damage policy."
+ "44ae5bd9d0a8912b05536759": {
+  "raw": {
+   "items": [
+    {
+     "sku": "APRON",
+     "eligible": true,
+     "rule": "R1",
+     "complaint_quote": "The apron arrived with a big tear along the seam.",
+     "why": "Item arrived damaged and was reported within the allowed window."
+    },
+    {
+     "sku": "TRIVET",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "Everything else is perfect, thanks!",
+     "why": "Item arrived in good condition and is being kept."
+    },
+    {
+     "sku": "WRAPS",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "Everything else is perfect, thanks!",
+     "why": "Item arrived in good condition and is being kept."
+    }
+   ],
+   "needs_human": false,
+   "question": "",
+   "reply": "We are so sorry your linen apron arrived damaged! We have approved your refund for that item. Since your trivet and beeswax wraps arrived in good condition and you are keeping them, they are not eligible for a return."
+  },
+  "model": "gemini-3.5-flash-lite"
  },
- "eabf05becabde54efa3e22df": {
-  "items": [
-   {
-    "sku": "KETTLE",
-    "eligible": false,
-    "rule": "",
-    "complaint_quote": "",
-    "why": "Item not mentioned in complaint."
-   },
-   {
-    "sku": "MUGS",
-    "eligible": false,
-    "rule": "",
-    "complaint_quote": "",
-    "why": "Item not mentioned in complaint."
-   },
-   {
-    "sku": "TEA",
-    "eligible": false,
-    "rule": "",
-    "complaint_quote": "",
-    "why": "Item not mentioned in complaint."
-   }
-  ],
-  "needs_human": true,
-  "question": "Could you please let us know which specific item arrived broken?",
-  "reply": "We are sorry to hear that an item arrived broken, but your complaint does not specify which item is damaged. Could you please let us know which item has the issue so we can process your refund?"
+ "6ccd70cadb7d25650240afc6": {
+  "raw": {
+   "items": [
+    {
+     "sku": "POUROVER",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "",
+     "why": "Customer complaint does not specify which item is broken."
+    },
+    {
+     "sku": "SCALE",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "",
+     "why": "Customer complaint does not specify which item is broken."
+    }
+   ],
+   "needs_human": true,
+   "question": "Could you please let us know which specific item arrived broken so we can process your refund?",
+   "reply": "We are so sorry to hear one of your items arrived broken! Could you please let us know which specific item was damaged so we can get your refund processed right away?"
+  },
+  "model": "gemini-3.5-flash-lite"
+ },
+ "5a65becf6680c34623a898be": {
+  "raw": {
+   "items": [
+    {
+     "sku": "KETTLE",
+     "eligible": true,
+     "rule": "R1",
+     "complaint_quote": "the kettle showed up cracked",
+     "why": "Arrived damaged and reported within fourteen days."
+    },
+    {
+     "sku": "MUGS",
+     "eligible": true,
+     "rule": "R3",
+     "complaint_quote": "mugs aren't really my style now that I've used them a few times",
+     "why": "Customer is unhappy with the item within thirty days."
+    },
+    {
+     "sku": "TEA",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "",
+     "why": "Arrived in good condition and not mentioned in complaint."
+    }
+   ],
+   "needs_human": false,
+   "question": "",
+   "reply": "We are processing your refund for the cracked kettle and the ceramic mug set since you contacted us within the eligible window. Since the tea sampler arrived in good condition and wasn't mentioned, it is not eligible for return."
+  },
+  "model": "gemini-3.5-flash-lite"
+ },
+ "bf7b3f8f76f5c5175cc6615a": {
+  "raw": {
+   "items": [
+    {
+     "sku": "APRON",
+     "eligible": true,
+     "rule": "R1",
+     "complaint_quote": "The apron arrived with a big tear along the seam.",
+     "why": "Arrived damaged and reported within fourteen days."
+    },
+    {
+     "sku": "TRIVET",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "Everything else is perfect",
+     "why": "Arrived in good condition and being kept."
+    },
+    {
+     "sku": "WRAPS",
+     "eligible": false,
+     "rule": "R2",
+     "complaint_quote": "Everything else is perfect",
+     "why": "Arrived in good condition and being kept."
+    }
+   ],
+   "needs_human": false,
+   "question": "",
+   "reply": "We are so sorry your linen apron arrived damaged! We are happy to issue a refund for it right away. Since your trivet and beeswax wraps arrived in perfect condition, those are not eligible for a return."
+  },
+  "model": "gemini-3.5-flash-lite"
+ },
+ "77eb8906916173e677459eed": {
+  "raw": {
+   "items": [
+    {
+     "sku": "POUROVER",
+     "eligible": false,
+     "rule": "R1",
+     "complaint_quote": "",
+     "why": "Not clearly identified as the broken item."
+    },
+    {
+     "sku": "SCALE",
+     "eligible": false,
+     "rule": "R1",
+     "complaint_quote": "",
+     "why": "Not clearly identified as the broken item."
+    }
+   ],
+   "needs_human": true,
+   "question": "Could you please let us know whether the Pour-over coffee set or the Coffee scale arrived broken?",
+   "reply": "Hi! We are sorry something arrived broken. Because your order had two items, could you please let us know whether the pour-over coffee set or the coffee scale is damaged? We will process your refund right away once we know."
+  },
+  "model": "gemini-3.5-flash-lite"
  }
 }

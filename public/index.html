@@ -111,6 +111,41 @@
   .call .m { color: #f1b45c; } .call .ok { color: #7ed6a2; } .call .bad { color: #ff8f7a; } .call .w { color: #cfc6b6; font-family: system-ui, sans-serif; font-size: 13px; }
   .call small { color: #8f8778; display: block; }
   footer { margin-top: 18px; color: var(--soft); font-size: 13px; text-align: center; }
+
+  /* queue */
+  .queue { display: grid; gap: 10px; grid-template-columns: 1fr; margin-bottom: 20px; }
+  @media (min-width: 900px) { .queue { grid-template-columns: repeat(3, 1fr) 1.25fr; } }
+  .tk { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; color: var(--ink); display: block; width: 100%; }
+  .tk:hover { border-color: var(--ink); }
+  .tk.on { border: 2px solid var(--ink); padding: 10px 12px; box-shadow: 0 6px 18px -12px #000; }
+  .tk .top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--soft); }
+  .tk .top b { color: var(--ink); font-size: 15px; }
+  .tk .say { font: italic 14px/1.35 var(--serif); margin: 5px 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 38px; }
+  .st { display: inline-block; font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--soft); }
+  .st.owes { color: var(--red); border-color: var(--red); background: var(--red-bg); }
+  .st.done { color: var(--green); border-color: var(--green); background: var(--green-bg); }
+  .st.ask { color: var(--amber); border-color: #e7cf94; background: var(--amber-bg); }
+  .sum { background: var(--ink); color: var(--paper); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
+  .sum .row { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; }
+  .sum .row span:last-child { font-family: var(--mono); }
+  .sum .big { font-size: 15px; font-weight: 700; color: #ffd9a0; }
+  .sum small { display: block; color: #a79f90; margin-top: 4px; line-height: 1.35; }
+  .sum button { margin-top: 8px; width: 100%; border: 1px solid #6b6459; background: transparent; color: var(--paper); border-radius: 7px; padding: 6px; font-size: 13px; }
+  .sum button:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
+  .sum button:disabled { opacity: .4; cursor: default; }
+  /* policy editor */
+  .presets { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .policy li { align-items: flex-start; }
+  .eff { flex: none; font: 700 10.5px var(--mono); letter-spacing: .06em; border-radius: 4px; padding: 3px 6px; border: 1px solid; background: transparent; margin-top: 1px; min-width: 62px; }
+  .eff.refund { color: var(--green); background: var(--green-bg); }
+  .eff.deny { color: var(--soft); }
+  .rt { flex: 1; outline: none; border-bottom: 1px dashed transparent; }
+  .rt:hover, .rt:focus { border-bottom-color: var(--soft); }
+  .tip { font-size: 12.5px; color: var(--soft); margin: 8px 0 0; }
+  textarea:disabled { background: #f6f2ea; color: var(--soft); }
+  .hook { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #9cc7ae; font-size: 13px; }
+  .hook b { color: var(--green); }
+  .call .in { color: #8fd0ff; }
 </style>
 </head>
 <body>
@@ -123,25 +158,29 @@
     <div class="pill"><i></i>PayPal sandbox · every payment below is a real API call</div>
   </header>
 
+  <div class="queue" id="queue"></div>
+
   <div class="grid">
     <section class="col">
       <p class="step"><span>1</span> The complaint</p>
       <div class="card">
         <div class="who"><span>From <b id="cust">customer</b></span><span id="delivered"></span></div>
         <textarea id="complaint" aria-label="Customer complaint" spellcheck="false"></textarea>
-        <div class="chips" id="chips"></div>
-        <button class="primary" id="resolve" disabled>Resolve this complaint</button>
+        <p class="tip">Edit the complaint to test it. The verdict is re-read from scratch.</p>
+        <button class="primary" id="resolve" disabled style="margin-top:12px">Resolve this complaint</button>
         <div id="err1"></div>
       </div>
       <div class="card policy">
         <h3>Store returns policy</h3>
+        <div class="presets" id="presets"></div>
         <ol id="policy"></ol>
+        <p class="tip">Click a rule to rewrite it, or flip what it does. Same complaint, different policy, different refund.</p>
       </div>
     </section>
 
     <section class="col">
       <p class="step"><span>2</span> The verdict, item by item</p>
-      <div class="card receipt" id="receipt"><div class="skeleton">Charging the customer's card on PayPal<span class="dots"></span></div></div>
+      <div class="card receipt" id="receipt"><div class="skeleton">Three customers are paying by card on PayPal<span class="dots"></span></div></div>
     </section>
 
     <section class="col">
@@ -151,10 +190,10 @@
   </div>
 
   <details class="trace" id="trace">
-    <summary><span>▸ What just happened on PayPal</span><span id="tracecount">0 API calls</span></summary>
+    <summary><span>▸ What just happened on PayPal for this ticket</span><span id="tracecount">0 API calls</span></summary>
     <div class="calls" id="calls"></div>
   </details>
-  <footer>Sandbox demo: test card, no real money. The AI reads the complaint and cites the policy; code checks its evidence, does the arithmetic and talks to PayPal.</footer>
+  <footer>Sandbox demo: test cards, no real money. The AI reads the complaint and cites the policy; code checks its evidence, does the arithmetic and talks to PayPal.</footer>
 </div>
 
 <script>
@@ -173,135 +212,223 @@ async function api(method, url, body) {
   if (!res.ok) throw new Error(j.error || 'Request failed (' + res.status + ')');
   return j;
 }
+const money = (n) => '$' + Number(n).toFixed(2);
+const nice = (s) => String(s || '').replace(/_/g, ' ');
 
-let cfg = null, order = null, decision = null, refund = null, busy = false;
+let cfg = null, session = null, sel = 0, busy = false, seq = 0, pollTimer = null, pollLeft = 0;
+let policy = { preset: 'strict', rules: [] };
+const drafts = {};
+const cur = () => session && session.tickets[sel];
 
-function showError(where, msg) { $(where).replaceChildren(msg ? h('div', { class: 'err' }, msg) : ''); }
+function showError(where, msg) { const el = $(where); if (el) el.replaceChildren(msg ? h('div', { class: 'err' }, msg) : ''); }
+function setPreset(name) { policy = { preset: name, rules: cfg.presets[name].rules.map((r) => ({ effect: r.effect, text: r.text })) }; }
+// A verdict belongs to one complaint and one policy. Change either and every unsettled verdict is dropped.
+function dropVerdicts(onlyCurrent) { if (!session) return; seq++; for (const t of session.tickets) if (!t.locked && (!onlyCurrent || t === cur())) t.decision = null; }
 
-function renderPolicy() {
-  const cited = new Set(decision ? decision.items.map((i) => i.rule).filter(Boolean) : []);
-  $('policy').replaceChildren(...cfg.policy.map((r) => h('li', { class: cited.has(r.id) ? 'cited' : '' }, h('code', {}, r.id), h('span', {}, r.text))));
+function statusOf(t) {
+  if (t.refund) return ['done', 'Refunded ' + money(t.refund.amount)];
+  if (!t.decision) return ['', 'Open'];
+  if (t.decision.needsHuman) return ['ask', 'Needs a reply'];
+  return t.decision.refundCents ? ['owes', 'Owes ' + money(t.decision.refund)] : ['', 'Owes nothing'];
+}
+
+function renderQueue() {
+  if (!session) { $('queue').replaceChildren(); return; }
+  const ts = session.tickets;
+  const all = ts.reduce((s, t) => s + Number(t.order.total), 0);
+  const resolved = ts.filter((t) => t.decision && !t.decision.needsHuman);
+  const owed = resolved.reduce((s, t) => s + Number(t.decision.refund), 0);
+  const sent = ts.reduce((s, t) => s + (t.refund ? Number(t.refund.amount) : 0), 0);
+  const open = ts.filter((t) => !t.decision && !t.locked).length;
+  $('queue').replaceChildren(
+    ...ts.map((t, i) => { const [cls, label] = statusOf(t); return h('button', { class: 'tk' + (i === sel ? ' on' : ''), onclick: () => { if (busy) return; sel = i; showError('err1', ''); renderAll(true); } },
+      h('div', { class: 'top' }, h('b', {}, t.customer), h('span', {}, 'paid ' + money(t.order.total))),
+      h('div', { class: 'say' }, drafts[t.id]),
+      h('span', { class: 'st ' + cls }, label)); }),
+    h('div', { class: 'sum' },
+      h('div', { class: 'row' }, h('span', {}, 'Refund all 3 in full'), h('span', {}, money(all))),
+      h('div', { class: 'row big' }, h('span', {}, 'Policy owes (' + resolved.length + ' resolved)'), h('span', {}, money(owed))),
+      h('div', { class: 'row' }, h('span', {}, 'Sent via PayPal'), h('span', {}, money(sent))),
+      h('small', {}, 'The first line is a what-if baseline, not a measured cost.'),
+      h('button', { onclick: resolveAll, disabled: busy || !open }, open ? 'Resolve all ' + open + ' open tickets' : 'All tickets resolved'),
+      h('button', { onclick: () => { if (!busy) start(); }, disabled: busy }, 'Start over with 3 new payments')));
+}
+
+function renderPolicy(rebuild) {
+  const d = cur() && cur().decision;
+  const cited = new Set(d ? d.items.map((i) => i.rule).filter(Boolean) : []);
+  if (rebuild) {
+    $('presets').replaceChildren(...Object.entries(cfg.presets).map(([k, p]) => h('button', { class: 'chip' + (policy.preset === k ? ' on' : ''), onclick: () => { if (busy) return; setPreset(k); dropVerdicts(false); renderAll(true); } }, p.label)),
+      policy.preset ? '' : h('span', { class: 'chip on' }, 'Edited'));
+    $('policy').replaceChildren(...policy.rules.map((r, i) => h('li', {},
+      h('code', {}, 'R' + (i + 1)),
+      h('button', { class: 'eff ' + r.effect, title: 'Flip what this rule does', onclick: () => { if (busy) return; r.effect = r.effect === 'refund' ? 'deny' : 'refund'; policy.preset = null; dropVerdicts(false); renderAll(true); } }, r.effect === 'refund' ? 'REFUNDS' : 'DENIES'),
+      h('span', { class: 'rt', contenteditable: 'plaintext-only', spellcheck: 'false', oninput: (e) => { r.text = e.target.textContent; policy.preset = null; dropVerdicts(false); renderAll(false); } }, r.text))));
+  }
+  [...$('policy').children].forEach((li, i) => li.classList.toggle('cited', cited.has('R' + (i + 1))));
+  if (!rebuild && !policy.preset) { const p = $('presets'); if (p.lastChild.textContent !== 'Edited') { [...p.children].forEach((c) => c.classList.remove('on')); p.append(h('span', { class: 'chip on' }, 'Edited')); } }
 }
 
 function renderReceipt() {
-  const box = $('receipt');
-  if (!order) return;
-  const lines = order.items.map((it) => {
-    const v = decision && decision.items.find((d) => d.sku === it.sku);
-    const stamp = !v ? null : decision.needsHuman ? h('span', { class: 'stamp hold' }, 'HOLD') : v.eligible ? h('span', { class: 'stamp refund' }, 'REFUND') : h('span', { class: 'stamp keep' }, 'NOT OWED');
-    const evidence = v && !decision.needsHuman && h('div', { class: 'evidence' },
-      v.quote ? h('q', {}, v.quote) : h('span', {}, 'The complaint says nothing is wrong with this item.'),
+  const t = cur(); if (!t) return;
+  const d = t.decision;
+  const lines = t.order.items.map((it) => {
+    const v = d && d.items.find((x) => x.sku === it.sku);
+    const stamp = !v ? null : d.needsHuman ? h('span', { class: 'stamp hold' }, 'HOLD') : v.eligible ? h('span', { class: 'stamp refund' }, 'REFUND') : h('span', { class: 'stamp keep' }, 'NOT OWED');
+    const evidence = v && !d.needsHuman && h('div', { class: 'evidence' },
+      v.quote ? h('q', {}, v.quote) : h('span', {}, 'The complaint reports no problem with this item.'),
       h('span', { class: 'because' }, v.rule ? h('code', {}, v.rule + ' ') : '', v.why || ''));
     return h('div', { class: 'item' + (v && !v.eligible ? ' keep' : '') },
       h('div', { class: 'row' }, h('span', {}, h('span', { class: 'name' }, it.name), stamp), h('span', { class: 'price' }, '$' + it.price)),
       evidence);
   });
-  const settled = refund ? [h('div', { class: 'row' }, h('span', {}, 'REFUNDED VIA PAYPAL'), h('span', {}, '−$' + refund.amount))] : [];
-  box.replaceChildren(
+  $('receipt').replaceChildren(
     h('div', { class: 'shop' }, cfg.store.name),
-    h('div', { class: 'meta' }, 'PayPal order ' + order.orderId),
-    h('hr', { class: 'rule' }),
-    ...lines,
-    h('hr', { class: 'rule' }),
+    h('div', { class: 'meta' }, 'Line items read from PayPal order ' + t.order.orderId),
+    h('hr', { class: 'rule' }), ...lines, h('hr', { class: 'rule' }),
     h('div', { class: 'totals' },
-      h('div', { class: 'row paid' }, h('span', {}, 'PAID BY CARD'), h('span', {}, '$' + order.total)),
-      ...settled,
-      h('div', { class: 'row' }, h('span', {}, 'Payment status'), h('span', {}, (refund ? refund.captureStatus : order.captureStatus).replace('_', ' ')))),
-    decision ? h('div', { class: 'aitag' }, 'Read by ' + decision.ai.model + (decision.ai.source === 'live' ? ' · ' + (decision.ai.ms / 1000).toFixed(1) + 's' : ' · saved answer') + ' · evidence checked by code')
-             : h('p', { class: 'hint' }, 'Press “Resolve this complaint” and each line gets a verdict.'));
+      h('div', { class: 'row paid' }, h('span', {}, 'PAID BY CARD'), h('span', {}, '$' + t.order.total)),
+      t.refund ? h('div', { class: 'row' }, h('span', {}, 'REFUNDED VIA PAYPAL'), h('span', {}, '−$' + t.refund.amount)) : '',
+      h('div', { class: 'row' }, h('span', {}, 'Payment status'), h('span', {}, nice(t.order.captureStatus)))),
+    d ? h('div', { class: 'aitag' }, 'Read by ' + d.ai.model + (d.ai.source === 'live' ? ' · live, ' + (d.ai.ms / 1000).toFixed(1) + 's' : ' · saved answer') + ' · evidence checked by code')
+      : h('p', { class: 'hint' }, 'Press “Resolve this complaint” and each line gets a verdict.'));
+}
+
+function hookLine(r) {
+  if (r.webhook) return h('div', { class: 'hook' }, h('b', {}, '✓ Confirmed by PayPal. '), 'Signed webhook ' + r.webhook.type + ' verified · event ' + r.webhook.eventId);
+  if (cfg.webhook.enabled) return h('div', { class: 'hook' }, pollLeft > 0 ? h('span', {}, 'Waiting for PayPal’s signed webhook', h('span', { class: 'dots' })) : 'PayPal’s webhook has not arrived yet; the status above was read back from the API.');
+  return h('div', { class: 'hook' }, 'Status read back from the API. Webhook confirmation runs on the hosted demo (it needs a public URL).');
 }
 
 function renderMoney() {
-  const box = $('money');
-  if (!decision) { box.replaceChildren(h('p', { class: 'hint' }, 'Resolve the complaint to see what is owed.')); return; }
-  const again = h('button', { class: 'ghost', onclick: newOrder }, 'Start over with a new order');
-  if (decision.needsHuman) {
-    box.replaceChildren(h('div', { class: 'stack' },
-      h('div', { class: 'slip hold' }, h('h4', {}, 'No money moves yet'),
-        h('div', {}, 'The complaint does not say enough to justify a refund. Ask the customer:'),
-        h('p', { class: 'reply' }, decision.question),
-        ...(decision.flags || []).map((f) => h('div', { style: 'font-size:13px;margin-top:6px' }, '• ' + f))),
-      again));
+  const box = $('money'), t = cur();
+  if (!t || !t.decision) { box.replaceChildren(h('p', { class: 'hint' }, 'Resolve the complaint to see what is owed.')); return; }
+  const d = t.decision, r = t.refund;
+  if (d.needsHuman) {
+    box.replaceChildren(h('div', { class: 'stack' }, h('div', { class: 'slip hold' }, h('h4', {}, 'No money moves yet'),
+      h('div', {}, 'The complaint does not say enough to justify a refund. Ask the customer:'),
+      h('p', { class: 'reply' }, d.question), ...(d.flags || []).map((f) => h('div', { style: 'font-size:13px;margin-top:6px' }, '• ' + f)))));
     return;
   }
-  const zero = decision.refundCents === 0;
-  const versus = h('div', { class: 'versus' },
-    h('div', { class: 'old' }, h('div', { class: 'lab' }, 'Refund it all'), h('div', { class: 'num' }, '$' + decision.blanket)),
+  const kids = [h('div', { class: 'versus' },
+    h('div', { class: 'old' }, h('div', { class: 'lab' }, 'Refund it all'), h('div', { class: 'num' }, '$' + d.blanket)),
     h('div', { class: 'arrow' }, '→'),
-    h('div', { class: 'new' }, h('div', { class: 'lab' }, 'Policy owes'), h('div', { class: 'num' }, '$' + decision.refund)));
-  const saved = h('div', { class: 'saved' }, h('b', {}, '$' + decision.saved + ' kept'), ' and the customer still gets every dollar the policy promises.');
-  const kids = [versus, saved];
-  if (!refund) {
-    kids.push(zero ? h('div', { class: 'slip hold' }, 'Nothing in this complaint qualifies for a refund under the policy.')
-      : h('button', { class: 'primary pay', id: 'pay', onclick: sendRefund, disabled: busy }, busy ? 'Talking to PayPal…' : 'Send $' + decision.refund + ' refund via PayPal'));
-    if (decision.reply) kids.push(h('div', {}, h('h3', {}, 'Draft reply to the customer'), h('p', { class: 'reply' }, decision.reply)));
+    h('div', { class: 'new' }, h('div', { class: 'lab' }, 'Policy owes'), h('div', { class: 'num' }, '$' + (r ? r.amount : d.refund)))),
+    h('div', { class: 'saved' }, h('b', {}, '$' + d.kept + ' not owed'), ' and the customer still gets every dollar the policy promises.')];
+  if (!r) {
+    kids.push(d.refundCents === 0 ? h('div', { class: 'slip hold' }, 'Nothing in this complaint qualifies for a refund under this policy.')
+      : h('button', { class: 'primary pay', onclick: sendRefund, disabled: busy }, busy === 'refund' ? 'Talking to PayPal…' : 'Send $' + d.refund + ' refund via PayPal'));
+    if (d.reply) kids.push(h('div', {}, h('h3', {}, 'Draft reply to the customer'), h('p', { class: 'reply' }, d.reply)));
   } else {
-    kids.push(h('div', { class: 'slip' }, h('h4', {}, '✓ $' + refund.amount + ' refunded to the customer'),
-      h('dl', {}, h('dt', {}, 'Refund ID'), h('dd', {}, refund.id), h('dt', {}, 'Status'), h('dd', {}, refund.status),
-        h('dt', {}, 'Payment'), h('dd', {}, refund.captureStatus.replace('_', ' ')), h('dt', {}, 'Note'), h('dd', {}, refund.note))));
-    if (refund.attempts > 1) {
-      kids.push(h('div', { class: 'slip replay' }, h('h4', {}, 'Clicked ' + refund.attempts + ' times. Refunded once.'),
-        h('div', {}, 'PayPal recognised the same request and replayed refund ' + refund.id + '. No extra money moved.')));
-    }
-    kids.push(h('button', { class: 'ghost', id: 'pay', onclick: sendRefund, disabled: busy }, busy ? 'Talking to PayPal…' : 'Try to refund it again (double click, retry, second agent)'));
-    if (decision.reply) kids.push(h('div', {}, h('h3', {}, 'Reply to the customer'), h('p', { class: 'reply' }, decision.reply)));
-    kids.push(again);
+    const done = r.status === 'COMPLETED';
+    kids.push(h('div', { class: 'slip' + (done ? '' : ' hold') }, h('h4', {}, done ? '✓ $' + r.amount + ' refunded to the customer' : 'Refund of $' + r.amount + ' sent, PayPal says: ' + nice(r.status)),
+      h('dl', {}, h('dt', {}, 'Refund ID'), h('dd', {}, r.id), h('dt', {}, 'Status'), h('dd', {}, nice(r.status)),
+        h('dt', {}, 'Payment'), h('dd', {}, nice(t.order.captureStatus)), h('dt', {}, 'Note'), h('dd', {}, r.note)),
+      hookLine(r)));
+    if (r.attempts > 1) kids.push(h('div', { class: 'slip replay' }, h('h4', {}, 'Clicked ' + r.attempts + ' times. Refunded once.'),
+      h('div', {}, 'PayPal recognised the same request and replayed refund ' + r.id + '. No extra money moved.')));
+    kids.push(h('button', { class: 'ghost', onclick: sendRefund, disabled: busy }, busy === 'refund' ? 'Talking to PayPal…' : 'Try to refund it again (double click, retry, second agent)'));
+    if (d.reply) kids.push(h('div', {}, h('h3', {}, 'Reply to the customer'), h('p', { class: 'reply' }, d.reply)));
   }
   kids.push(h('div', { id: 'err3' }));
   box.replaceChildren(h('div', { class: 'stack' }, ...kids));
 }
 
-function renderTrace(trace) {
-  if (trace) order.trace = trace;
-  const t = (order && order.trace) || [];
-  $('tracecount').textContent = t.length + ' API call' + (t.length === 1 ? '' : 's');
-  $('calls').replaceChildren(...t.map((c) => h('div', { class: 'call' },
-    h('span', { class: 'm' }, c.method), h('span', {}, c.path, c.requestId ? h('small', {}, 'PayPal-Request-Id: ' + c.requestId) : ''),
-    h('span', { class: c.status < 300 ? 'ok' : 'bad' }, String(c.status)), h('span', {}, c.ms + ' ms'),
-    h('span', { class: 'w' }, c.what, c.debugId ? h('small', {}, 'debug id ' + c.debugId) : ''))));
+function renderTrace() {
+  const t = cur(), tr = (t && t.trace) || [];
+  $('tracecount').textContent = tr.length + ' call' + (tr.length === 1 ? '' : 's');
+  $('calls').replaceChildren(...tr.map((c) => h('div', { class: 'call' },
+    h('span', { class: c.dir === 'in' ? 'in' : 'm' }, c.method), h('span', {}, c.path, c.requestId ? h('small', {}, 'PayPal-Request-Id: ' + c.requestId) : ''),
+    h('span', { class: c.status >= 200 && c.status < 300 ? 'ok' : 'bad' }, c.status ? String(c.status) : '—'), h('span', {}, c.dir === 'in' ? 'push' : c.ms + ' ms'),
+    h('span', { class: 'w' }, c.what, c.debugId ? h('small', {}, (c.dir === 'in' ? 'event ' : 'debug id ') + c.debugId) : ''))));
 }
 
-function renderAll() { renderPolicy(); renderReceipt(); renderMoney(); renderTrace(); $('resolve').disabled = busy || !order || !!refund; $('resolve').textContent = refund ? 'Order settled' : busy === 'decide' ? 'Reading complaint and policy…' : 'Resolve this complaint'; }
+function renderAll(rebuildPolicy) {
+  const t = cur();
+  renderQueue(); renderPolicy(!!rebuildPolicy); renderReceipt(); renderMoney(); renderTrace();
+  if (t) {
+    $('cust').textContent = t.customer;
+    $('delivered').textContent = 'Order delivered ' + t.deliveredDaysAgo + ' days ago';
+    const ta = $('complaint');
+    if (ta.value !== drafts[t.id]) ta.value = drafts[t.id];
+    ta.disabled = t.locked || !!busy;
+  }
+  const b = $('resolve');
+  b.disabled = !!busy || !t || t.locked;
+  b.textContent = t && t.locked ? 'Ticket settled' : busy === 'decide' ? 'Reading complaint and policy…' : 'Resolve this complaint';
+}
 
-async function newOrder() {
-  order = null; decision = null; refund = null; showError('err1', '');
-  $('receipt').replaceChildren(h('div', { class: 'skeleton' }, "Charging the customer's card on PayPal", h('span', { class: 'dots' })));
+async function start() {
+  session = null; sel = 0; stopPoll();
+  $('queue').replaceChildren();
+  $('receipt').replaceChildren(h('div', { class: 'skeleton' }, 'Three customers are paying by card on PayPal', h('span', { class: 'dots' })));
   $('money').replaceChildren(h('p', { class: 'hint' }, 'Resolve the complaint to see what is owed.'));
-  $('resolve').disabled = true;
-  try { order = await api('POST', '/api/order'); renderAll(); }
-  catch (e) { $('receipt').replaceChildren(h('div', { class: 'err' }, e.message), h('p', {}, h('button', { class: 'ghost', onclick: newOrder }, 'Try again'))); }
+  try {
+    session = await api('POST', '/api/session');
+    for (const t of session.tickets) drafts[t.id] = t.complaint;
+    renderAll(true);
+  } catch (e) { $('receipt').replaceChildren(h('div', { class: 'err' }, e.message), h('p', {}, h('button', { class: 'ghost', onclick: start }, 'Try again'))); }
+}
+
+async function decideTicket(t) {
+  const mine = ++seq, sent = drafts[t.id];
+  const out = await api('POST', '/api/decide', { key: session.key, ticket: t.id, complaint: sent, policy: policy.rules });
+  // Only accept the verdict if nothing it was based on changed while the model was reading.
+  if (mine !== seq || sent !== drafts[t.id]) return;
+  session.tickets[session.tickets.indexOf(t)] = out.ticket;
 }
 
 async function resolve() {
-  if (busy || !order) return;
-  busy = 'decide'; decision = null; showError('err1', ''); renderAll();
-  try { decision = (await api('POST', '/api/decide', { key: order.key, complaint: $('complaint').value })).decision; }
-  catch (e) { showError('err1', e.message); }
-  busy = false; renderAll();
+  const t = cur(); if (busy || !t || t.locked) return;
+  busy = 'decide'; t.decision = null; showError('err1', ''); renderAll(false);
+  try { await decideTicket(t); } catch (e) { showError('err1', e.message); }
+  busy = false; renderAll(false);
+}
+
+async function resolveAll() {
+  if (busy || !session) return;
+  busy = 'decide'; showError('err1', ''); renderAll(false);
+  for (const t of session.tickets.filter((x) => !x.decision && !x.locked)) {
+    try { await decideTicket(t); } catch (e) { showError('err1', t.customer + ': ' + e.message); break; }
+    renderQueue();
+  }
+  busy = false; renderAll(false);
 }
 
 async function sendRefund() {
-  if (busy || !order || !decision) return;
-  busy = 'refund'; renderAll();
-  try { const out = await api('POST', '/api/refund', { key: order.key }); refund = out.refund; order.trace = out.trace; busy = false; renderAll(); }
-  catch (e) { busy = false; renderAll(); showError('err3', e.message); }
+  const t = cur(); if (busy || !t || !t.decision) return;
+  busy = 'refund'; renderAll(false);
+  try {
+    const out = await api('POST', '/api/refund', { key: session.key, ticket: t.id });
+    session.tickets[session.tickets.indexOf(t)] = out.ticket;
+    busy = false; startPoll(); renderAll(false);
+  } catch (e) { busy = false; renderAll(false); showError('err3', e.message); }
 }
 
-function setSample(i) {
-  $('complaint').value = cfg.samples[i].text;
-  [...$('chips').children].forEach((c, n) => c.classList.toggle('on', n === i));
-  if (!refund) { decision = null; renderAll(); }
+// After a refund, watch for PayPal's webhook to land on the server.
+function stopPoll() { clearInterval(pollTimer); pollTimer = null; pollLeft = 0; }
+function startPoll() {
+  if (!cfg.webhook.enabled) return;
+  pollLeft = 40;
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    const waiting = session && session.tickets.some((t) => t.refund && !t.refund.webhook);
+    if (!waiting || --pollLeft <= 0) { stopPoll(); renderAll(false); return; }
+    try {
+      const fresh = await api('GET', '/api/session?key=' + session.key);
+      fresh.tickets.forEach((f, i) => { const t = session.tickets[i]; t.refund = f.refund; t.trace = f.trace; t.order = f.order; t.locked = f.locked; });
+      if (!busy) renderAll(false);
+    } catch (_) { /* keep waiting */ }
+  }, 2500);
 }
 
 (async function init() {
   try { cfg = await api('GET', '/api/config'); } catch (e) { $('receipt').replaceChildren(h('div', { class: 'err' }, e.message)); return; }
-  $('cust').textContent = cfg.store.customer;
-  $('delivered').textContent = 'Order delivered ' + cfg.store.deliveredDaysAgo + ' days ago';
-  $('chips').replaceChildren(...cfg.samples.map((s, i) => h('button', { class: 'chip', onclick: () => setSample(i) }, s.label)));
-  $('complaint').addEventListener('input', () => { [...$('chips').children].forEach((c) => c.classList.remove('on')); if (decision && !refund) { decision = null; renderAll(); } });
+  setPreset('strict');
+  $('complaint').addEventListener('input', (e) => { const t = cur(); if (!t || t.locked) return; drafts[t.id] = e.target.value; dropVerdicts(true); renderAll(false); });
   $('resolve').addEventListener('click', resolve);
-  setSample(0); renderPolicy();
-  newOrder();
+  renderPolicy(true);
+  start();
 })();
 </script>
 </body>
