@@ -17,7 +17,7 @@ No login. The page opens on a support queue of three tickets. Behind each ticket
 
 1. Press **Resolve this complaint** on Maya's ticket. Each receipt line is stamped `REFUND` or `NOT OWED`, with the customer's own words and the policy rule next to it. `$80.00` is struck through and becomes `$25.00`.
 2. Switch the policy to **Happiness guarantee** and resolve again. Same complaint, different policy: `$65.00`. Rewrite a rule in your own words, or flip a rule from `REFUNDS` to `DENIES`, and the verdict follows.
-3. Press **Send refund via PayPal**. You get a real sandbox refund ID. The app reads the refund and payment status back from PayPal; a completed partial refund makes the payment *partially refunded*. **Confirmed by PayPal** is reserved for a matching, signature-verified webhook. Real webhook delivery has not yet been verified in this build; a missing webhook does not imply that the refund failed.
+3. Press **Send refund via PayPal**. You get a real sandbox refund ID. The app reads the refund and payment status back from PayPal; a completed partial refund makes the payment *partially refunded*. **Confirmed by PayPal** appears only after a matching, signature-verified webhook. Real delivery was verified on the hosted build on November 12, 2026; delivery can be delayed, and a missing webhook does not imply that the refund failed.
 4. Press **Try to refund it again**. PayPal replays the same refund: "Clicked 2 times. Refunded once."
 5. Open Priya's ticket ("one of the things in my box arrived broken"). No refund button appears; the agent gets the question to ask instead.
 6. Before sending a refund, enter a new complaint and resolve again: uncached text is read live by the model. A ticket is locked once its refund request starts.
@@ -129,7 +129,7 @@ docker run --rm --network none --user node --cap-drop ALL --security-opt no-new-
 
 ## Scope and limits
 
-- One demo store. The three shopping carts, delivery ages and complaints are fixtures; orders, payments and refunds are real sandbox objects. Webhook registration and verification are implemented, but delivery of a real matching refund event remains unverified. Connecting a merchant's own orders, tickets and policy document is the next step, not part of this build.
+- One demo store. The three shopping carts, delivery ages and complaints are fixtures; orders, payments, refunds and received webhook events are real sandbox objects. A real matching refund webhook was signature-verified on the hosted build: refund `4TC04254R01776237`, event `WH-5NF53608X01755745-8F542397EG8037502` (November 12, 2026). This verifies that run, not a delivery-time guarantee. Connecting a merchant's own orders, tickets and policy document is the next step, not part of this build.
 - Evidence checks validate literal quotations and a rule's declared refund/deny effect. They do not prove that the model interpreted the complaint, item or policy correctly. The support agent reviews each proposal before approving a refund.
 - State lives in memory. If the server restarts, the demo run is gone (the payments still exist at PayPal); a production version needs a database for audit and reconciliation.
 - Sandbox only: PayPal's published test card, no real money.
