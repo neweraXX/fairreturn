@@ -9,7 +9,7 @@ If an agent refunds that whole $80 order, $55 is more than the standard policy o
 Built for the *Build What's Next with PayPal and AI* hackathon.
 
 - **Live demo:** https://fairreturn.onrender.com (free tier: the first load can take up to a minute to wake up)
-- **Video:** VIDEO_URL
+- **Video:** https://youtu.be/1NzUEOZooh0
 
 ## Try it in a minute
 
