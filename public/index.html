@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FairReturn — refund what the policy owes</title>
+<style>
+  :root {
+    --paper: #f3ede2; --card: #fffdf8; --ink: #1d1a16; --soft: #6b6459; --line: #d9d0c0;
+    --red: #cf3f27; --red-bg: #fbe9e4; --green: #1c7448; --green-bg: #e4f3ea; --amber: #a86a00; --amber-bg: #fbf0d6;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 22px 20px 60px; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .brand { font: 700 15px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+  .brand b { color: var(--red); }
+  h1 { font: 400 clamp(26px, 3.4vw, 40px)/1.12 var(--serif); margin: 6px 0 0; letter-spacing: -.01em; }
+  h1 em { color: var(--red); font-style: italic; }
+  .pill { font: 12px var(--mono); border: 1px solid var(--ink); border-radius: 99px; padding: 5px 12px; white-space: nowrap; }
+  .pill i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 7px; }
+
+  .grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 1020px) { .grid { grid-template-columns: 1fr 1.08fr .95fr; align-items: start; } }
+  .col > .step { font: 700 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--soft); margin: 0 0 8px; display: flex; gap: 8px; align-items: center; }
+  .step span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 12px; letter-spacing: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; box-shadow: 0 1px 0 #0000000a, 0 8px 24px -18px #00000040; }
+  .card + .card { margin-top: 12px; }
+
+  /* 1 — complaint */
+  .who { display: flex; justify-content: space-between; font-size: 13px; color: var(--soft); margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
+  .who b { color: var(--ink); }
+  textarea { width: 100%; min-height: 132px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 16px/1.5 var(--serif); color: var(--ink); background: #fff; }
+  textarea:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+  .chip { border: 1px solid var(--line); background: transparent; border-radius: 99px; padding: 4px 11px; font-size: 13px; color: var(--ink); }
+  .chip:hover, .chip.on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .primary { width: 100%; border: 0; border-radius: 8px; padding: 13px 16px; background: var(--ink); color: var(--paper); font-weight: 650; font-size: 16px; }
+  .primary:hover { background: #000; }
+  .primary:disabled { opacity: .45; cursor: default; }
+  .primary.pay { background: var(--red); }
+  .primary.pay:hover { background: #b5351f; }
+  .ghost { border: 1px solid var(--ink); background: transparent; border-radius: 8px; padding: 9px 14px; font-size: 14px; color: var(--ink); width: 100%; }
+  .ghost:hover { background: var(--ink); color: var(--paper); }
+  .policy h3, .card h3 { font: 700 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); margin: 0 0 8px; }
+  .policy ol { list-style: none; margin: 0; padding: 0; }
+  .policy li { display: flex; gap: 10px; padding: 7px 8px; border-radius: 6px; font-size: 13.5px; border: 1px solid transparent; transition: background .3s; }
+  .policy li code { font: 700 12px var(--mono); color: var(--soft); padding-top: 2px; }
+  .policy li.cited { background: var(--amber-bg); border-color: #e7cf94; }
+  .policy li.cited code { color: var(--amber); }
+
+  /* 2 — receipt */
+  .receipt { font-family: var(--mono); font-size: 13.5px; padding: 18px 16px 14px; position: relative; }
+  .receipt .shop { text-align: center; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+  .receipt .meta { text-align: center; color: var(--soft); font-size: 12px; margin: 2px 0 12px; word-break: break-all; }
+  .rule { border: 0; border-top: 1px dashed #b9ae9b; margin: 10px 0; }
+  .item { padding: 10px 0; border-bottom: 1px dashed #d9d0c0; }
+  .item:last-of-type { border-bottom: 0; }
+  .item .row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .item .name { font-weight: 700; }
+  .item .price { white-space: nowrap; }
+  .item.keep .price { color: var(--soft); }
+  .stamp { display: inline-block; font: 800 11px var(--mono); letter-spacing: .14em; padding: 3px 8px; border: 2px solid; border-radius: 4px; transform: rotate(-4deg); margin-left: 8px; animation: thud .28s cubic-bezier(.2,1.6,.4,1) both; }
+  .stamp.refund { color: var(--red); background: var(--red-bg); }
+  .stamp.keep { color: var(--soft); transform: rotate(3deg); }
+  .stamp.hold { color: var(--amber); background: var(--amber-bg); }
+  @keyframes thud { from { transform: scale(2.2) rotate(-12deg); opacity: 0; } }
+  .evidence { margin-top: 7px; font: 13px/1.45 system-ui, sans-serif; color: var(--soft); }
+  .evidence q { font: italic 14px var(--serif); color: var(--ink); background: linear-gradient(transparent 55%, #f6dc8f 55%); quotes: "“" "”"; }
+  .evidence .because { display: block; margin-top: 3px; }
+  .evidence code { font: 700 11.5px var(--mono); color: var(--amber); }
+  .totals .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .totals .paid { font-weight: 700; }
+  .aitag { margin-top: 10px; font: 11.5px var(--mono); color: var(--soft); text-align: center; }
+  .hint { color: var(--soft); font: 14px/1.5 system-ui, sans-serif; text-align: center; padding: 8px 0 2px; }
+  .skeleton { color: var(--soft); text-align: center; padding: 30px 0; font-family: var(--mono); }
+  .dots::after { content: ''; animation: dots 1.2s steps(4) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+
+  /* 3 — money */
+  .versus { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; text-align: center; margin: 4px 0 14px; }
+  .versus .lab { font: 700 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
+  .versus .num { font: 400 34px/1.1 var(--serif); }
+  .versus .old .num { color: var(--soft); text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .versus .new .num { color: var(--red); font-size: 44px; }
+  .versus .arrow { font-size: 22px; color: var(--soft); }
+  .saved { text-align: center; font-size: 14px; margin-bottom: 14px; }
+  .saved b { background: var(--green-bg); color: var(--green); padding: 2px 8px; border-radius: 99px; }
+  .slip { border: 1px solid var(--green); background: var(--green-bg); border-radius: 8px; padding: 12px; font-size: 14px; margin-bottom: 12px; }
+  .slip.replay { border-color: var(--ink); background: #fff; }
+  .slip.hold { border-color: #e7cf94; background: var(--amber-bg); }
+  .slip h4 { margin: 0 0 6px; font-size: 15px; }
+  .slip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font: 12.5px var(--mono); }
+  .slip dt { color: var(--soft); }
+  .slip dd { margin: 0; word-break: break-all; }
+  .reply { font: italic 15px/1.5 var(--serif); border-left: 3px solid var(--line); padding: 2px 0 2px 12px; margin: 6px 0 0; }
+  .err { border: 1px solid var(--red); background: var(--red-bg); color: #7d2212; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-top: 10px; }
+  .stack > * + * { margin-top: 10px; }
+
+  /* trace */
+  details.trace { margin-top: 22px; background: var(--ink); color: #eee6d8; border-radius: 10px; padding: 0 16px; }
+  details.trace summary { cursor: pointer; padding: 13px 0; font: 700 13px var(--mono); letter-spacing: .06em; list-style: none; display: flex; justify-content: space-between; gap: 10px; }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary span:last-child { color: #a79f90; font-weight: 400; }
+  .calls { padding: 0 0 14px; overflow-x: auto; }
+  .call { display: grid; grid-template-columns: 54px minmax(260px, 1.2fr) 46px 62px minmax(200px, 1.4fr); gap: 12px; font: 12.5px var(--mono); padding: 6px 0; border-top: 1px solid #3a352e; min-width: 760px; }
+  .call .m { color: #f1b45c; } .call .ok { color: #7ed6a2; } .call .bad { color: #ff8f7a; } .call .w { color: #cfc6b6; font-family: system-ui, sans-serif; font-size: 13px; }
+  .call small { color: #8f8778; display: block; }
+  footer { margin-top: 18px; color: var(--soft); font-size: 13px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">Fair<b>Return</b></div>
+      <h1>Refund what the policy owes. <em>Not the whole order.</em></h1>
+    </div>
+    <div class="pill"><i></i>PayPal sandbox · every payment below is a real API call</div>
+  </header>
+
+  <div class="grid">
+    <section class="col">
+      <p class="step"><span>1</span> The complaint</p>
+      <div class="card">
+        <div class="who"><span>From <b id="cust">customer</b></span><span id="delivered"></span></div>
+        <textarea id="complaint" aria-label="Customer complaint" spellcheck="false"></textarea>
+        <div class="chips" id="chips"></div>
+        <button class="primary" id="resolve" disabled>Resolve this complaint</button>
+        <div id="err1"></div>
+      </div>
+      <div class="card policy">
+        <h3>Store returns policy</h3>
+        <ol id="policy"></ol>
+      </div>
+    </section>
+
+    <section class="col">
+      <p class="step"><span>2</span> The verdict, item by item</p>
+      <div class="card receipt" id="receipt"><div class="skeleton">Charging the customer's card on PayPal<span class="dots"></span></div></div>
+    </section>
+
+    <section class="col">
+      <p class="step"><span>3</span> The money</p>
+      <div class="card" id="money"><p class="hint">Resolve the complaint to see what is owed.</p></div>
+    </section>
+  </div>
+
+  <details class="trace" id="trace">
+    <summary><span>▸ What just happened on PayPal</span><span id="tracecount">0 API calls</span></summary>
+    <div class="calls" id="calls"></div>
+  </details>
+  <footer>Sandbox demo: test card, no real money. The AI reads the complaint and cites the policy; code checks its evidence, does the arithmetic and talks to PayPal.</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') el.className = v; else if (k.startsWith('on')) el.addEventListener(k.slice(2), v); else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));
+  return el;
+}
+async function api(method, url, body) {
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'Request failed (' + res.status + ')');
+  return j;
+}
+
+let cfg = null, order = null, decision = null, refund = null, busy = false;
+
+function showError(where, msg) { $(where).replaceChildren(msg ? h('div', { class: 'err' }, msg) : ''); }
+
+function renderPolicy() {
+  const cited = new Set(decision ? decision.items.map((i) => i.rule).filter(Boolean) : []);
+  $('policy').replaceChildren(...cfg.policy.map((r) => h('li', { class: cited.has(r.id) ? 'cited' : '' }, h('code', {}, r.id), h('span', {}, r.text))));
+}
+
+function renderReceipt() {
+  const box = $('receipt');
+  if (!order) return;
+  const lines = order.items.map((it) => {
+    const v = decision && decision.items.find((d) => d.sku === it.sku);
+    const stamp = !v ? null : decision.needsHuman ? h('span', { class: 'stamp hold' }, 'HOLD') : v.eligible ? h('span', { class: 'stamp refund' }, 'REFUND') : h('span', { class: 'stamp keep' }, 'NOT OWED');
+    const evidence = v && !decision.needsHuman && h('div', { class: 'evidence' },
+      v.quote ? h('q', {}, v.quote) : h('span', {}, 'The complaint says nothing is wrong with this item.'),
+      h('span', { class: 'because' }, v.rule ? h('code', {}, v.rule + ' ') : '', v.why || ''));
+    return h('div', { class: 'item' + (v && !v.eligible ? ' keep' : '') },
+      h('div', { class: 'row' }, h('span', {}, h('span', { class: 'name' }, it.name), stamp), h('span', { class: 'price' }, '$' + it.price)),
+      evidence);
+  });
+  const settled = refund ? [h('div', { class: 'row' }, h('span', {}, 'REFUNDED VIA PAYPAL'), h('span', {}, '−$' + refund.amount))] : [];
+  box.replaceChildren(
+    h('div', { class: 'shop' }, cfg.store.name),
+    h('div', { class: 'meta' }, 'PayPal order ' + order.orderId),
+    h('hr', { class: 'rule' }),
+    ...lines,
+    h('hr', { class: 'rule' }),
+    h('div', { class: 'totals' },
+      h('div', { class: 'row paid' }, h('span', {}, 'PAID BY CARD'), h('span', {}, '$' + order.total)),
+      ...settled,
+      h('div', { class: 'row' }, h('span', {}, 'Payment status'), h('span', {}, (refund ? refund.captureStatus : order.captureStatus).replace('_', ' ')))),
+    decision ? h('div', { class: 'aitag' }, 'Read by ' + decision.ai.model + (decision.ai.source === 'live' ? ' · ' + (decision.ai.ms / 1000).toFixed(1) + 's' : ' · saved answer') + ' · evidence checked by code')
+             : h('p', { class: 'hint' }, 'Press “Resolve this complaint” and each line gets a verdict.'));
+}
+
+function renderMoney() {
+  const box = $('money');
+  if (!decision) { box.replaceChildren(h('p', { class: 'hint' }, 'Resolve the complaint to see what is owed.')); return; }
+  const again = h('button', { class: 'ghost', onclick: newOrder }, 'Start over with a new order');
+  if (decision.needsHuman) {
+    box.replaceChildren(h('div', { class: 'stack' },
+      h('div', { class: 'slip hold' }, h('h4', {}, 'No money moves yet'),
+        h('div', {}, 'The complaint does not say enough to justify a refund. Ask the customer:'),
+        h('p', { class: 'reply' }, decision.question),
+        ...(decision.flags || []).map((f) => h('div', { style: 'font-size:13px;margin-top:6px' }, '• ' + f))),
+      again));
+    return;
+  }
+  const zero = decision.refundCents === 0;
+  const versus = h('div', { class: 'versus' },
+    h('div', { class: 'old' }, h('div', { class: 'lab' }, 'Refund it all'), h('div', { class: 'num' }, '$' + decision.blanket)),
+    h('div', { class: 'arrow' }, '→'),
+    h('div', { class: 'new' }, h('div', { class: 'lab' }, 'Policy owes'), h('div', { class: 'num' }, '$' + decision.refund)));
+  const saved = h('div', { class: 'saved' }, h('b', {}, '$' + decision.saved + ' kept'), ' and the customer still gets every dollar the policy promises.');
+  const kids = [versus, saved];
+  if (!refund) {
+    kids.push(zero ? h('div', { class: 'slip hold' }, 'Nothing in this complaint qualifies for a refund under the policy.')
+      : h('button', { class: 'primary pay', id: 'pay', onclick: sendRefund, disabled: busy }, busy ? 'Talking to PayPal…' : 'Send $' + decision.refund + ' refund via PayPal'));
+    if (decision.reply) kids.push(h('div', {}, h('h3', {}, 'Draft reply to the customer'), h('p', { class: 'reply' }, decision.reply)));
+  } else {
+    kids.push(h('div', { class: 'slip' }, h('h4', {}, '✓ $' + refund.amount + ' refunded to the customer'),
+      h('dl', {}, h('dt', {}, 'Refund ID'), h('dd', {}, refund.id), h('dt', {}, 'Status'), h('dd', {}, refund.status),
+        h('dt', {}, 'Payment'), h('dd', {}, refund.captureStatus.replace('_', ' ')), h('dt', {}, 'Note'), h('dd', {}, refund.note))));
+    if (refund.attempts > 1) {
+      kids.push(h('div', { class: 'slip replay' }, h('h4', {}, 'Clicked ' + refund.attempts + ' times. Refunded once.'),
+        h('div', {}, 'PayPal recognised the same request and replayed refund ' + refund.id + '. No extra money moved.')));
+    }
+    kids.push(h('button', { class: 'ghost', id: 'pay', onclick: sendRefund, disabled: busy }, busy ? 'Talking to PayPal…' : 'Try to refund it again (double click, retry, second agent)'));
+    if (decision.reply) kids.push(h('div', {}, h('h3', {}, 'Reply to the customer'), h('p', { class: 'reply' }, decision.reply)));
+    kids.push(again);
+  }
+  kids.push(h('div', { id: 'err3' }));
+  box.replaceChildren(h('div', { class: 'stack' }, ...kids));
+}
+
+function renderTrace(trace) {
+  if (trace) order.trace = trace;
+  const t = (order && order.trace) || [];
+  $('tracecount').textContent = t.length + ' API call' + (t.length === 1 ? '' : 's');
+  $('calls').replaceChildren(...t.map((c) => h('div', { class: 'call' },
+    h('span', { class: 'm' }, c.method), h('span', {}, c.path, c.requestId ? h('small', {}, 'PayPal-Request-Id: ' + c.requestId) : ''),
+    h('span', { class: c.status < 300 ? 'ok' : 'bad' }, String(c.status)), h('span', {}, c.ms + ' ms'),
+    h('span', { class: 'w' }, c.what, c.debugId ? h('small', {}, 'debug id ' + c.debugId) : ''))));
+}
+
+function renderAll() { renderPolicy(); renderReceipt(); renderMoney(); renderTrace(); $('resolve').disabled = busy || !order || !!refund; $('resolve').textContent = refund ? 'Order settled' : busy === 'decide' ? 'Reading complaint and policy…' : 'Resolve this complaint'; }
+
+async function newOrder() {
+  order = null; decision = null; refund = null; showError('err1', '');
+  $('receipt').replaceChildren(h('div', { class: 'skeleton' }, "Charging the customer's card on PayPal", h('span', { class: 'dots' })));
+  $('money').replaceChildren(h('p', { class: 'hint' }, 'Resolve the complaint to see what is owed.'));
+  $('resolve').disabled = true;
+  try { order = await api('POST', '/api/order'); renderAll(); }
+  catch (e) { $('receipt').replaceChildren(h('div', { class: 'err' }, e.message), h('p', {}, h('button', { class: 'ghost', onclick: newOrder }, 'Try again'))); }
+}
+
+async function resolve() {
+  if (busy || !order) return;
+  busy = 'decide'; decision = null; showError('err1', ''); renderAll();
+  try { decision = (await api('POST', '/api/decide', { key: order.key, complaint: $('complaint').value })).decision; }
+  catch (e) { showError('err1', e.message); }
+  busy = false; renderAll();
+}
+
+async function sendRefund() {
+  if (busy || !order || !decision) return;
+  busy = 'refund'; renderAll();
+  try { const out = await api('POST', '/api/refund', { key: order.key }); refund = out.refund; order.trace = out.trace; busy = false; renderAll(); }
+  catch (e) { busy = false; renderAll(); showError('err3', e.message); }
+}
+
+function setSample(i) {
+  $('complaint').value = cfg.samples[i].text;
+  [...$('chips').children].forEach((c, n) => c.classList.toggle('on', n === i));
+  if (!refund) { decision = null; renderAll(); }
+}
+
+(async function init() {
+  try { cfg = await api('GET', '/api/config'); } catch (e) { $('receipt').replaceChildren(h('div', { class: 'err' }, e.message)); return; }
+  $('cust').textContent = cfg.store.customer;
+  $('delivered').textContent = 'Order delivered ' + cfg.store.deliveredDaysAgo + ' days ago';
+  $('chips').replaceChildren(...cfg.samples.map((s, i) => h('button', { class: 'chip', onclick: () => setSample(i) }, s.label)));
+  $('complaint').addEventListener('input', () => { [...$('chips').children].forEach((c) => c.classList.remove('on')); if (decision && !refund) { decision = null; renderAll(); } });
+  $('resolve').addEventListener('click', resolve);
+  setSample(0); renderPolicy();
+  newOrder();
+})();
+</script>
+</body>
+</html>

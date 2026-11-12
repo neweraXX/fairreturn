@@ -1,0 +1,86 @@
+{
+ "54e86f7f12e05f9a9d0a77c4": {
+  "items": [
+   {
+    "sku": "KETTLE",
+    "eligible": true,
+    "rule": "R1",
+    "complaint_quote": "the kettle showed up cracked",
+    "why": "Arrived damaged and reported within fourteen days."
+   },
+   {
+    "sku": "MUGS",
+    "eligible": false,
+    "rule": "R3",
+    "complaint_quote": "mugs aren't really my style now that I've used them a few times",
+    "why": "Opened and used change-of-mind items are ineligible."
+   },
+   {
+    "sku": "TEA",
+    "eligible": false,
+    "rule": "R2",
+    "complaint_quote": "",
+    "why": "No problem reported with this item."
+   }
+  ],
+  "needs_human": false,
+  "question": "",
+  "reply": "We are so sorry your kettle arrived cracked! We can issue a refund for the damaged kettle. However, since the mugs have been used, we unfortunately cannot accept a return for them, and no issues were reported for the tea."
+ },
+ "e4715f1e96a7bb9a3202424d": {
+  "items": [
+   {
+    "sku": "KETTLE",
+    "eligible": true,
+    "rule": "R1",
+    "complaint_quote": "The glass kettle has a crack down the side.",
+    "why": "Reported damaged upon arrival within allowed timeframe."
+   },
+   {
+    "sku": "MUGS",
+    "eligible": false,
+    "rule": "R3",
+    "complaint_quote": "The mugs and the tea are fine, we love them.",
+    "why": "Item is undamaged and not being returned."
+   },
+   {
+    "sku": "TEA",
+    "eligible": false,
+    "rule": "R3",
+    "complaint_quote": "The mugs and the tea are fine, we love them.",
+    "why": "Item is undamaged and not being returned."
+   }
+  ],
+  "needs_human": false,
+  "question": "",
+  "reply": "Hello! We are so glad you love the mugs and tea, but we are very sorry about the cracked kettle. We have approved a refund for the glass kettle under our damage policy."
+ },
+ "eabf05becabde54efa3e22df": {
+  "items": [
+   {
+    "sku": "KETTLE",
+    "eligible": false,
+    "rule": "",
+    "complaint_quote": "",
+    "why": "Item not mentioned in complaint."
+   },
+   {
+    "sku": "MUGS",
+    "eligible": false,
+    "rule": "",
+    "complaint_quote": "",
+    "why": "Item not mentioned in complaint."
+   },
+   {
+    "sku": "TEA",
+    "eligible": false,
+    "rule": "",
+    "complaint_quote": "",
+    "why": "Item not mentioned in complaint."
+   }
+  ],
+  "needs_human": true,
+  "question": "Could you please let us know which specific item arrived broken?",
+  "reply": "We are sorry to hear that an item arrived broken, but your complaint does not specify which item is damaged. Could you please let us know which item has the issue so we can process your refund?"
+ }
+}
