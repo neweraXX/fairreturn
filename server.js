@@ -76,6 +76,7 @@ async function ppToken(trace) {
   const t0 = Date.now();
   const res = await fetch(PP_BASE + '/v1/oauth2/token', {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: { Authorization: 'Basic ' + Buffer.from(PP_ID + ':' + PP_SECRET).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials',
   });
@@ -183,9 +184,17 @@ const SYSTEM_PROMPT = [
 let cache = {};
 try { cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { cache = {}; }
 const norm = (s) => String(s).toLowerCase().replace(/\s+/g, ' ').trim();
-// The cache identity covers everything the answer depends on: the complaint, the policy, and the order lines.
-const cacheKey = (complaint, policy, items) => crypto.createHash('sha256')
-  .update(JSON.stringify([norm(complaint), policy.map((r) => [r.effect, norm(r.text)]), items.map((i) => [i.sku, i.name])])).digest('hex').slice(0, 24);
+// Exact complaint text matters for literal quotations. Include delivery age and prompt as well.
+const cacheKey = (complaint, policy, items, deliveredDaysAgo) => crypto.createHash('sha256')
+  .update(JSON.stringify([complaint, policy.map((r) => [r.effect, r.text]), items.map((i) => [i.sku, i.name]), deliveredDaysAgo, SYSTEM_PROMPT])).digest('hex').slice(0, 24);
+// The six shipped answers predate exact cache keys. Migrate ONLY the known fixture inputs;
+// edited text cannot reuse their normalized keys, and the fixture demo still needs no LLM key.
+for (const cart of CARTS) for (const preset of Object.values(POLICY_PRESETS)) {
+  const policy = cleanPolicy(preset.rules), items = cart.items.map((i) => ({ sku: i[0], name: i[1] }));
+  const oldKey = crypto.createHash('sha256').update(JSON.stringify([norm(cart.complaint), policy.map((r) => [r.effect, norm(r.text)]), items.map((i) => [i.sku, i.name])])).digest('hex').slice(0, 24);
+  const key = cacheKey(cart.complaint, policy, items, cart.deliveredDaysAgo);
+  if (own(cache, oldKey)) { if (!own(cache, key)) cache[key] = cache[oldKey]; delete cache[oldKey]; }
+}
 let llmCalls = [];
 
 async function askModel(complaint, policy, t) {
@@ -222,13 +231,13 @@ function verify(raw, complaint, policy, items) {
   const flags = [];
   const byId = {};
   for (const r of policy) byId[r.id] = r;
-  const hay = norm(complaint);
   const list = raw && Array.isArray(raw.items) ? raw.items : [];
   const out = items.map((c) => {
     const m = list.find((x) => x && x.sku === c.sku);
     if (!m) { flags.push('The model gave no verdict for ' + c.name + '.'); return { sku: c.sku, name: c.name, cents: c.cents, price: usd(c.cents), eligible: false, rule: null, quote: '', why: 'No verdict' }; }
+    if (typeof m.eligible !== 'boolean' || list.filter((x) => x && x.sku === c.sku).length !== 1) flags.push('The model gave an invalid or duplicate verdict for ' + c.name + '.');
     const quote = typeof m.complaint_quote === 'string' ? m.complaint_quote.trim() : '';
-    const quoteOk = quote.length >= 4 && hay.includes(norm(quote));
+    const quoteOk = quote.length >= 4 && complaint.includes(quote);
     const rule = typeof m.rule === 'string' && own(byId, m.rule) ? byId[m.rule] : null; // own keys only: "toString" is not a rule
     let eligible = m.eligible === true;
     if (eligible && !quoteOk) { eligible = false; flags.push('No verbatim evidence in the complaint for refunding ' + c.name + '.'); }
@@ -236,7 +245,7 @@ function verify(raw, complaint, policy, items) {
     if (eligible && rule.effect !== 'refund') { eligible = false; flags.push('The rule cited for ' + c.name + ' (' + rule.id + ') denies refunds, so it cannot justify one.'); }
     return { sku: c.sku, name: c.name, cents: c.cents, price: usd(c.cents), eligible, rule: rule ? rule.id : null, quote: quoteOk ? quote : '', why: String(m.why || '').slice(0, 120) };
   });
-  const needsHuman = !raw || raw.needs_human === true || flags.length > 0;
+  const needsHuman = !raw || raw.needs_human === true || (raw.needs_human !== undefined && typeof raw.needs_human !== 'boolean') || flags.length > 0;
   const total = items.reduce((s, i) => s + i.cents, 0);
   const refundCents = needsHuman ? 0 : out.filter((i) => i.eligible).reduce((s, i) => s + i.cents, 0);
   return {
@@ -248,7 +257,7 @@ function verify(raw, complaint, policy, items) {
 }
 
 async function decide(t, complaint, policy) {
-  const k = cacheKey(complaint, policy, t.order.items);
+  const k = cacheKey(complaint, policy, t.order.items, t.deliveredDaysAgo);
   const t0 = Date.now();
   let raw = own(cache, k) ? cache[k].raw : null, model = raw ? cache[k].model : LLM_MODEL, source = 'saved';
   if (!raw) {
@@ -267,7 +276,30 @@ function applyEvent(t, ev) { // a verified PAYMENT.CAPTURE.REFUNDED event for th
   if (ev.status) t.refund.status = ev.status;
 }
 
-async function refund(t) {
+async function refund(t, approvedDecisionId) {
+  if (t.refundWork) throw httpError(409, 'A refund request is already in progress. Wait for its result, then retry if needed.');
+  const expectedId = t.intent ? t.intent.decisionId : t.decision && t.decision.id;
+  if (!approvedDecisionId || approvedDecisionId !== expectedId) throw httpError(409, 'The decision changed. Review the current proposal before approving a refund.');
+  const work = performRefund(t); // freezes the intent synchronously, before yielding to PayPal
+  t.refundWork = work;
+  try { return await work; } finally { if (t.refundWork === work) t.refundWork = null; }
+}
+
+async function refreshTicket(t) {
+  if (!t.refund) return;
+  if (t.refreshWork) return t.refreshWork;
+  const work = (async () => {
+    const rr = await pp(t.trace, 'Read the refund back for its authoritative status', 'GET', '/v2/payments/refunds/' + t.refund.id);
+    if (rr.ok && rr.json.status) t.refund.status = rr.json.status;
+    const c = await pp(t.trace, 'Read the payment back to confirm its new state', 'GET', '/v2/payments/captures/' + t.order.captureId);
+    t.order.captureStatus = c.ok && c.json.status ? c.json.status : 'UNKNOWN';
+    t.lastRefresh = Date.now();
+  })();
+  t.refreshWork = work;
+  try { await work; } finally { if (t.refreshWork === work) t.refreshWork = null; }
+}
+
+async function performRefund(t) {
   // The intent is frozen BEFORE the first call to PayPal. Whatever happens next (timeout, lost response, a changed
   // verdict in another tab), every retry sends exactly this body under exactly this idempotency key.
   if (!t.intent) {
@@ -276,6 +308,7 @@ async function refund(t) {
     if (d.needsHuman || d.refundCents <= 0) throw httpError(409, 'Nothing to refund for this decision.');
     const paid = d.items.filter((i) => i.eligible);
     t.intent = {
+      decisionId: d.id,
       requestId: 'fr-refund-' + t.order.captureId, // one capture, one refund decision, one key
       items: paid.map((i) => i.name),
       body: {
@@ -297,10 +330,7 @@ async function refund(t) {
   t.refund.attempts += 1;
   t.refund.replayed = !first && r.json.id === t.refund.id;
   // Never trust local state for money: read the refund and the payment back from PayPal.
-  const rr = await pp(t.trace, 'Read the refund back for its authoritative status', 'GET', '/v2/payments/refunds/' + t.refund.id);
-  if (rr.ok && rr.json.status) t.refund.status = rr.json.status;
-  const c = await pp(t.trace, 'Read the payment back to confirm its new state', 'GET', '/v2/payments/captures/' + t.order.captureId);
-  t.order.captureStatus = c.ok && c.json.status ? c.json.status : 'UNKNOWN';
+  await refreshTicket(t);
   return t.refund;
 }
 
@@ -394,19 +424,29 @@ const parse = (s) => { try { return s ? JSON.parse(s) : {}; } catch (_) { throw 
 const routes = {
   'GET /api/config': async () => ({ store: STORE, presets: POLICY_PRESETS, model: LLM_MODEL, liveAi: !!LLM_KEY, paypalReady: !!(PP_ID && PP_SECRET), webhook: { enabled: webhook.enabled } }),
   'POST /api/session': async (b, url, req) => viewSession(await createSession(req)),
-  'GET /api/session': async (b, url) => viewSession(needSession(url.searchParams.get('key'))),
+  'GET /api/session': async (b, url) => {
+    const s = needSession(url.searchParams.get('key'));
+    await Promise.all(s.tickets.filter((t) => t.refund && !t.refundWork && Date.now() - (t.lastRefresh || 0) >= 5000 &&
+      (t.refund.status === 'PENDING' || t.order.captureStatus === 'UNKNOWN' ||
+        (t.refund.status === 'COMPLETED' && !['PARTIALLY_REFUNDED', 'REFUNDED'].includes(t.order.captureStatus)))).map(refreshTicket));
+    return viewSession(s);
+  },
   'POST /api/decide': async (b) => {
     const t = needTicket(b);
     if (t.intent) throw httpError(409, 'A refund for this ticket is already on its way or settled, so its verdict is locked.');
     const complaint = String(b.complaint || '').trim();
     if (complaint.length < 8) throw httpError(400, 'Write the complaint first (at least a sentence).');
     if (complaint.length > 1200) throw httpError(400, 'Keep the complaint under 1200 characters.');
-    const d = await decide(t, complaint, cleanPolicy(b.policy));
+    const policy = cleanPolicy(b.policy);
+    const revision = t.decisionRevision = (t.decisionRevision || 0) + 1;
+    t.decision = null; // an older proposal cannot be approved while a replacement is being read
+    const d = await decide(t, complaint, policy);
     if (t.intent) throw httpError(409, 'A refund for this ticket was sent while the complaint was being read.');
-    t.decision = d;
+    if (revision !== t.decisionRevision) throw httpError(409, 'A newer complaint is being resolved for this ticket. Use its verdict.');
+    t.decision = { ...d, id: crypto.randomBytes(12).toString('hex') };
     return { ticket: viewTicket(t) };
   },
-  'POST /api/refund': async (b) => { const t = needTicket(b); await refund(t); return { ticket: viewTicket(t) }; },
+  'POST /api/refund': async (b) => { const t = needTicket(b); await refund(t, b.decisionId); return { ticket: viewTicket(t) }; },
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
@@ -437,4 +477,4 @@ if (require.main === module) {
     ensureWebhook();
   });
 }
-module.exports = { verify, cleanPolicy, snapshotOrder, POLICY_PRESETS };
+module.exports = { verify, cleanPolicy, snapshotOrder, POLICY_PRESETS, refund, refreshTicket, cacheKey, decide, CARTS };

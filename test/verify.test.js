@@ -32,6 +32,26 @@ test('a made-up quote blocks the refund and escalates to a human', () => {
   assert.equal(d.refundCents, 0);
 });
 
+test('case or whitespace rewritten by the model is not a verbatim quote', () => {
+  for (const quote of ['The kettle showed up cracked', 'the kettle  showed up cracked']) {
+    const d = verify({ items: [v('KETTLE', true, 'R1', quote), ...rest] }, complaint, strict, items);
+    assert.equal(d.needsHuman, true);
+    assert.equal(d.refundCents, 0);
+  }
+});
+
+test('malformed booleans and duplicate item verdicts require human review', () => {
+  const kettle = v('KETTLE', true, 'R1', 'the kettle showed up cracked');
+  for (const raw of [
+    { items: [{ ...kettle, eligible: 'true' }, ...rest] },
+    { items: [kettle, ...rest], needs_human: 'true' },
+    { items: [kettle, { ...kettle, eligible: false }, ...rest] },
+  ]) {
+    assert.equal(verify(raw, complaint, strict, items).refundCents, 0);
+    assert.equal(verify(raw, complaint, strict, items).needsHuman, true);
+  }
+});
+
 test('an invented or inherited rule name blocks the refund', () => {
   for (const rule of ['R9', 'toString', 'constructor', '__proto__']) {
     const d = verify({ items: [v('KETTLE', true, rule, 'the kettle showed up cracked'), ...rest] }, complaint, strict, items);

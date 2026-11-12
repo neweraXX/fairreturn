@@ -215,7 +215,7 @@ async function api(method, url, body) {
 const money = (n) => '$' + Number(n).toFixed(2);
 const nice = (s) => String(s || '').replace(/_/g, ' ');
 
-let cfg = null, session = null, sel = 0, busy = false, seq = 0, pollTimer = null, pollLeft = 0;
+let cfg = null, session = null, sel = 0, busy = false, seq = 0, pollTimer = null, pollLeft = 0, pollEpoch = 0;
 let policy = { preset: 'strict', rules: [] };
 const drafts = {};
 const cur = () => session && session.tickets[sel];
@@ -226,7 +226,8 @@ function setPreset(name) { policy = { preset: name, rules: cfg.presets[name].rul
 function dropVerdicts(onlyCurrent) { if (!session) return; seq++; for (const t of session.tickets) if (!t.locked && (!onlyCurrent || t === cur())) t.decision = null; }
 
 function statusOf(t) {
-  if (t.refund) return ['done', 'Refunded ' + money(t.refund.amount)];
+  if (t.refund) return t.refund.status === 'COMPLETED' ? ['done', 'Refunded ' + money(t.refund.amount)] : ['ask', 'Refund ' + nice(t.refund.status)];
+  if (t.locked) return ['ask', 'Refund request locked — retry'];
   if (!t.decision) return ['', 'Open'];
   if (t.decision.needsHuman) return ['ask', 'Needs a reply'];
   return t.decision.refundCents ? ['owes', 'Owes ' + money(t.decision.refund)] : ['', 'Owes nothing'];
@@ -238,7 +239,7 @@ function renderQueue() {
   const all = ts.reduce((s, t) => s + Number(t.order.total), 0);
   const resolved = ts.filter((t) => t.decision && !t.decision.needsHuman);
   const owed = resolved.reduce((s, t) => s + Number(t.decision.refund), 0);
-  const sent = ts.reduce((s, t) => s + (t.refund ? Number(t.refund.amount) : 0), 0);
+  const sent = ts.reduce((s, t) => s + (t.refund && t.refund.status === 'COMPLETED' ? Number(t.refund.amount) : 0), 0);
   const open = ts.filter((t) => !t.decision && !t.locked).length;
   $('queue').replaceChildren(
     ...ts.map((t, i) => { const [cls, label] = statusOf(t); return h('button', { class: 'tk' + (i === sel ? ' on' : ''), onclick: () => { if (busy) return; sel = i; showError('err1', ''); renderAll(true); } },
@@ -248,7 +249,7 @@ function renderQueue() {
     h('div', { class: 'sum' },
       h('div', { class: 'row' }, h('span', {}, 'Refund all 3 in full'), h('span', {}, money(all))),
       h('div', { class: 'row big' }, h('span', {}, 'Policy owes (' + resolved.length + ' resolved)'), h('span', {}, money(owed))),
-      h('div', { class: 'row' }, h('span', {}, 'Sent via PayPal'), h('span', {}, money(sent))),
+      h('div', { class: 'row' }, h('span', {}, 'Completed via PayPal'), h('span', {}, money(sent))),
       h('small', {}, 'The first line is a what-if baseline, not a measured cost.'),
       h('button', { onclick: resolveAll, disabled: busy || !open }, open ? 'Resolve all ' + open + ' open tickets' : 'All tickets resolved'),
       h('button', { onclick: () => { if (!busy) start(); }, disabled: busy }, 'Start over with 3 new payments')));
@@ -257,15 +258,23 @@ function renderQueue() {
 function renderPolicy(rebuild) {
   const d = cur() && cur().decision;
   const cited = new Set(d ? d.items.map((i) => i.rule).filter(Boolean) : []);
+  if (cur() && cur().locked && d) {
+    $('presets').replaceChildren(h('span', { class: 'chip on' }, 'Policy approved for this refund'));
+    $('policy').replaceChildren(...d.policy.map((r) => h('li', { class: cited.has(r.id) ? 'cited' : '' },
+      h('code', {}, r.id), h('span', { class: 'eff ' + r.effect }, r.effect === 'refund' ? 'REFUNDS' : 'DENIES'), h('span', {}, r.text))));
+    return;
+  }
   if (rebuild) {
     $('presets').replaceChildren(...Object.entries(cfg.presets).map(([k, p]) => h('button', { class: 'chip' + (policy.preset === k ? ' on' : ''), onclick: () => { if (busy) return; setPreset(k); dropVerdicts(false); renderAll(true); } }, p.label)),
       policy.preset ? '' : h('span', { class: 'chip on' }, 'Edited'));
     $('policy').replaceChildren(...policy.rules.map((r, i) => h('li', {},
       h('code', {}, 'R' + (i + 1)),
       h('button', { class: 'eff ' + r.effect, title: 'Flip what this rule does', onclick: () => { if (busy) return; r.effect = r.effect === 'refund' ? 'deny' : 'refund'; policy.preset = null; dropVerdicts(false); renderAll(true); } }, r.effect === 'refund' ? 'REFUNDS' : 'DENIES'),
-      h('span', { class: 'rt', contenteditable: 'plaintext-only', spellcheck: 'false', oninput: (e) => { r.text = e.target.textContent; policy.preset = null; dropVerdicts(false); renderAll(false); } }, r.text))));
+      h('span', { class: 'rt', contenteditable: 'plaintext-only', spellcheck: 'false', oninput: (e) => { if (busy) return; r.text = e.target.textContent; policy.preset = null; dropVerdicts(false); renderAll(false); } }, r.text))));
   }
   [...$('policy').children].forEach((li, i) => li.classList.toggle('cited', cited.has('R' + (i + 1))));
+  $('policy').querySelectorAll('.rt').forEach((el) => el.setAttribute('contenteditable', busy ? 'false' : 'plaintext-only'));
+  $('policy').querySelectorAll('button').forEach((el) => { el.disabled = !!busy; });
   if (!rebuild && !policy.preset) { const p = $('presets'); if (p.lastChild.textContent !== 'Edited') { [...p.children].forEach((c) => c.classList.remove('on')); p.append(h('span', { class: 'chip on' }, 'Edited')); } }
 }
 
@@ -288,7 +297,7 @@ function renderReceipt() {
     h('hr', { class: 'rule' }), ...lines, h('hr', { class: 'rule' }),
     h('div', { class: 'totals' },
       h('div', { class: 'row paid' }, h('span', {}, 'PAID BY CARD'), h('span', {}, '$' + t.order.total)),
-      t.refund ? h('div', { class: 'row' }, h('span', {}, 'REFUNDED VIA PAYPAL'), h('span', {}, '−$' + t.refund.amount)) : '',
+      t.refund ? h('div', { class: 'row' }, h('span', {}, t.refund.status === 'COMPLETED' ? 'REFUNDED VIA PAYPAL' : 'REFUND ' + nice(t.refund.status).toUpperCase()), h('span', {}, (t.refund.status === 'COMPLETED' ? '−$' : '$') + t.refund.amount)) : '',
       h('div', { class: 'row' }, h('span', {}, 'Payment status'), h('span', {}, nice(t.order.captureStatus)))),
     d ? h('div', { class: 'aitag' }, 'Read by ' + d.ai.model + (d.ai.source === 'live' ? ' · live, ' + (d.ai.ms / 1000).toFixed(1) + 's' : ' · saved answer') + ' · evidence checked by code')
       : h('p', { class: 'hint' }, 'Press “Resolve this complaint” and each line gets a verdict.'));
@@ -296,8 +305,8 @@ function renderReceipt() {
 
 function hookLine(r) {
   if (r.webhook) return h('div', { class: 'hook' }, h('b', {}, '✓ Confirmed by PayPal. '), 'Signed webhook ' + r.webhook.type + ' verified · event ' + r.webhook.eventId);
-  if (cfg.webhook.enabled) return h('div', { class: 'hook' }, pollLeft > 0 ? h('span', {}, 'Waiting for PayPal’s signed webhook', h('span', { class: 'dots' })) : 'PayPal’s webhook has not arrived yet; the status above was read back from the API.');
-  return h('div', { class: 'hook' }, 'Status read back from the API. Webhook confirmation runs on the hosted demo (it needs a public URL).');
+  if (cfg.webhook.enabled) return h('div', { class: 'hook' }, pollLeft > 0 ? h('span', {}, 'Status read back from the API. Waiting for PayPal’s signed webhook', h('span', { class: 'dots' })) : 'PayPal’s webhook has not arrived yet; the status above was read back from the API.');
+  return h('div', { class: 'hook' }, 'Status read back from the API. Webhook confirmation requires a registered public HTTPS endpoint.');
 }
 
 function renderMoney() {
@@ -316,6 +325,7 @@ function renderMoney() {
     h('div', { class: 'new' }, h('div', { class: 'lab' }, 'Policy owes'), h('div', { class: 'num' }, '$' + (r ? r.amount : d.refund)))),
     h('div', { class: 'saved' }, h('b', {}, '$' + d.kept + ' not owed'), ' and the customer still gets every dollar the policy promises.')];
   if (!r) {
+    if (t.locked) kids.push(h('div', { class: 'slip hold' }, 'The refund request is locked to this decision. Retry to recover its result using the same PayPal request ID.'));
     kids.push(d.refundCents === 0 ? h('div', { class: 'slip hold' }, 'Nothing in this complaint qualifies for a refund under this policy.')
       : h('button', { class: 'primary pay', onclick: sendRefund, disabled: busy }, busy === 'refund' ? 'Talking to PayPal…' : 'Send $' + d.refund + ' refund via PayPal'));
     if (d.reply) kids.push(h('div', {}, h('h3', {}, 'Draft reply to the customer'), h('p', { class: 'reply' }, d.reply)));
@@ -325,7 +335,7 @@ function renderMoney() {
       h('dl', {}, h('dt', {}, 'Refund ID'), h('dd', {}, r.id), h('dt', {}, 'Status'), h('dd', {}, nice(r.status)),
         h('dt', {}, 'Payment'), h('dd', {}, nice(t.order.captureStatus)), h('dt', {}, 'Note'), h('dd', {}, r.note)),
       hookLine(r)));
-    if (r.attempts > 1) kids.push(h('div', { class: 'slip replay' }, h('h4', {}, 'Clicked ' + r.attempts + ' times. Refunded once.'),
+    if (r.replayed) kids.push(h('div', { class: 'slip replay' }, h('h4', {}, 'Clicked ' + r.attempts + ' times. ' + (done ? 'Refunded once.' : 'One refund request.')),
       h('div', {}, 'PayPal recognised the same request and replayed refund ' + r.id + '. No extra money moved.')));
     kids.push(h('button', { class: 'ghost', onclick: sendRefund, disabled: busy }, busy === 'refund' ? 'Talking to PayPal…' : 'Try to refund it again (double click, retry, second agent)'));
     if (d.reply) kids.push(h('div', {}, h('h3', {}, 'Reply to the customer'), h('p', { class: 'reply' }, d.reply)));
@@ -355,7 +365,7 @@ function renderAll(rebuildPolicy) {
   }
   const b = $('resolve');
   b.disabled = !!busy || !t || t.locked;
-  b.textContent = t && t.locked ? 'Ticket settled' : busy === 'decide' ? 'Reading complaint and policy…' : 'Resolve this complaint';
+  b.textContent = t && t.locked ? 'Refund decision locked' : busy === 'decide' ? 'Reading complaint and policy…' : 'Resolve this complaint';
 }
 
 async function start() {
@@ -397,28 +407,40 @@ async function resolveAll() {
 
 async function sendRefund() {
   const t = cur(); if (busy || !t || !t.decision) return;
-  busy = 'refund'; renderAll(false);
+  busy = 'refund'; stopPoll(); renderAll(false);
   try {
-    const out = await api('POST', '/api/refund', { key: session.key, ticket: t.id });
+    const out = await api('POST', '/api/refund', { key: session.key, ticket: t.id, decisionId: t.decision.id });
     session.tickets[session.tickets.indexOf(t)] = out.ticket;
     busy = false; startPoll(); renderAll(false);
-  } catch (e) { busy = false; renderAll(false); showError('err3', e.message); }
+  } catch (e) {
+    // PayPal may have accepted the request even when its response was lost. Recover the frozen state.
+    stopPoll();
+    try { session = await api('GET', '/api/session?key=' + session.key); } catch (_) { /* retain the current view */ }
+    busy = false; startPoll(); renderAll(true); showError('err3', e.message);
+  }
 }
 
 // After a refund, watch for PayPal's webhook to land on the server.
-function stopPoll() { clearInterval(pollTimer); pollTimer = null; pollLeft = 0; }
+function stopPoll() { clearInterval(pollTimer); pollTimer = null; pollLeft = 0; pollEpoch++; }
 function startPoll() {
-  if (!cfg.webhook.enabled) return;
   pollLeft = 40;
   if (pollTimer) return;
+  const watching = session;
+  const epoch = pollEpoch;
+  let inFlight = false;
   pollTimer = setInterval(async () => {
-    const waiting = session && session.tickets.some((t) => t.refund && !t.refund.webhook);
+    if (inFlight || busy || session !== watching || epoch !== pollEpoch) return;
+    const waiting = session && session.tickets.some((t) => t.refund &&
+      ((cfg.webhook.enabled && !t.refund.webhook) || t.refund.status === 'PENDING' || t.order.captureStatus === 'UNKNOWN' ||
+        (t.refund.status === 'COMPLETED' && !['PARTIALLY_REFUNDED', 'REFUNDED'].includes(t.order.captureStatus))));
     if (!waiting || --pollLeft <= 0) { stopPoll(); renderAll(false); return; }
+    inFlight = true;
     try {
       const fresh = await api('GET', '/api/session?key=' + session.key);
+      if (session !== watching || busy || epoch !== pollEpoch) return;
       fresh.tickets.forEach((f, i) => { const t = session.tickets[i]; t.refund = f.refund; t.trace = f.trace; t.order = f.order; t.locked = f.locked; });
       if (!busy) renderAll(false);
-    } catch (_) { /* keep waiting */ }
+    } catch (_) { /* keep waiting */ } finally { inFlight = false; }
   }, 2500);
 }
 

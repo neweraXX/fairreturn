@@ -4,7 +4,7 @@
 
 A customer writes: *"the kettle showed up cracked, and the mugs aren't really my style now that I've used them. Can I just get my money back for everything?"*
 
-A rushed support agent refunds the whole $80 order. FairReturn reads the complaint against the store's returns policy, shows that only the $25 kettle is owed, quotes the evidence for every line, and sends that exact partial refund through PayPal with one click. Click twice and it still refunds once. PayPal then confirms the refund to the app with a signed webhook.
+If an agent refunds that whole $80 order, $55 is more than the standard policy owes. FairReturn reads the complaint against the store's returns policy, proposes the $25 kettle refund with cited evidence, and sends that partial refund through PayPal after the agent approves. Retry with the same frozen request and PayPal returns the original refund. Status is read back from PayPal's API.
 
 Built for the *Build What's Next with PayPal and AI* hackathon.
 
@@ -17,10 +17,10 @@ No login. The page opens on a support queue of three tickets. Behind each ticket
 
 1. Press **Resolve this complaint** on Maya's ticket. Each receipt line is stamped `REFUND` or `NOT OWED`, with the customer's own words and the policy rule next to it. `$80.00` is struck through and becomes `$25.00`.
 2. Switch the policy to **Happiness guarantee** and resolve again. Same complaint, different policy: `$65.00`. Rewrite a rule in your own words, or flip a rule from `REFUNDS` to `DENIES`, and the verdict follows.
-3. Press **Send refund via PayPal**. You get a real refund ID and the payment becomes *partially refunded*. On the hosted demo, a moment later the slip shows **Confirmed by PayPal** when the signed `PAYMENT.CAPTURE.REFUNDED` webhook arrives and passes verification.
+3. Press **Send refund via PayPal**. You get a real sandbox refund ID. The app reads the refund and payment status back from PayPal; a completed partial refund makes the payment *partially refunded*. **Confirmed by PayPal** is reserved for a matching, signature-verified webhook. Real webhook delivery has not yet been verified in this build; a missing webhook does not imply that the refund failed.
 4. Press **Try to refund it again**. PayPal replays the same refund: "Clicked 2 times. Refunded once."
 5. Open Priya's ticket ("one of the things in my box arrived broken"). No refund button appears; the agent gets the question to ask instead.
-6. Edit any complaint and resolve again: free text is read live by the model.
+6. Before sending a refund, enter a new complaint and resolve again: uncached text is read live by the model. A ticket is locked once its refund request starts.
 7. Open **What just happened on PayPal** at the bottom to see every API call for the ticket, with its idempotency key and PayPal debug ID.
 
 **Resolve all open tickets** works through the queue, and the dark tile adds it up. **Start over** charges three fresh test payments.
@@ -41,16 +41,16 @@ PayPal order (line items read back from PayPal) + complaint + policy
         │
         ▼
   guardrails in code (server.js: verify)
-   • every quote must appear word-for-word in the complaint
+   • every refund quote must appear word-for-word in the complaint
    • the cited rule must exist AND be a rule that grants refunds
    • the model never sees or sets an amount; code adds up PayPal's line prices
-   • anything missing or unclear ⇒ "needs a human", $0, no refund button
+   • missing/invalid item verdicts, invalid refund evidence, or a human-review flag ⇒ $0, no refund button
         │
         ▼
   agent clicks once ──► refund intent frozen ──► PayPal refund under a fixed idempotency key
         │
         ▼
-  status read back from PayPal ──► signed webhook confirms it
+  status read back from PayPal ──► optional signed-webhook confirmation
 ```
 
 The model does the part rules can't: mapping messy language ("not really my style now that I've used them") to the right clause for the right item, and ignoring what the customer merely *asks for*. Code does the part a model shouldn't: arithmetic, evidence checking, and moving money.
@@ -79,7 +79,7 @@ PayPal is also the last line of defence: a refund larger than what is left on th
 - **Model:** Google Gemini `gemini-3.5-flash-lite` through its OpenAI-compatible endpoint (one call per ticket, temperature 0, JSON output), with a short retry and a fallback model because free tiers answer 503 under load. Any OpenAI-compatible chat endpoint works via `LLM_BASE_URL` / `LLM_MODEL`.
 - **Job:** per-item eligibility, the policy rule that applies, a verbatim quote from the complaint, a clarifying question when the complaint is ambiguous, and a draft reply to the customer.
 - **Not its job:** amounts, PayPal calls, or the final say. See `verify()` in `server.js` and `test/verify.test.js`.
-- Answers for the three built-in tickets under both preset policies are stored in `cache/decisions.json` (the receipt says "saved answer"), so the demo works without an LLM key or when the free tier is rate-limited. Any edited complaint or policy is read live (the receipt says "live").
+- Answers for the three built-in tickets under both preset policies are stored in `cache/decisions.json` (the receipt says "saved answer"), so those decisions work without an LLM key or when the free tier is rate-limited. A new, uncached complaint or policy is read live (the receipt says "live").
 - Development tools: the code was written with AI coding assistants (Claude Code, OpenAI Codex CLI) and reviewed by the author.
 
 ## Run it yourself
@@ -103,7 +103,7 @@ docker build -t fairreturn .
 ```
 
 ```bash
-docker run --rm -p 8787:8787 --env-file .env fairreturn
+docker run --rm -p 127.0.0.1:8787:8787 --env-file .env --cap-drop ALL --security-opt no-new-privileges fairreturn
 ```
 
 Or with Node 18+ (there are no dependencies, so there is nothing to install):
@@ -117,10 +117,10 @@ Open http://localhost:8787.
 - Without `LLM_API_KEY` the built-in tickets still work with either preset policy. To judge edited complaints or policies, add a key for any OpenAI-compatible endpoint; a free Google AI Studio key works with the defaults in `.env.example`.
 - Webhooks need a public HTTPS address, so a local run confirms refunds by reading them back from the API. Set `PUBLIC_URL=https://your-host` (Render sets this automatically) to turn webhook confirmation on.
 
-Tests (no network needed):
+Tests in Docker (no network or API keys needed), from this repository directory:
 
 ```bash
-node --test
+docker run --rm --network none --user node --cap-drop ALL --security-opt no-new-privileges -v "$PWD:/app:ro" -w /app node:22-alpine node --test
 ```
 
 ## Deploy on Render
@@ -129,7 +129,8 @@ node --test
 
 ## Scope and limits
 
-- One demo store. The three shopping carts and complaints are fixtures; the orders, payments, refunds and webhook events are real sandbox objects. Connecting a merchant's own orders, tickets and policy document is the next step, not part of this build.
+- One demo store. The three shopping carts, delivery ages and complaints are fixtures; orders, payments and refunds are real sandbox objects. Webhook registration and verification are implemented, but delivery of a real matching refund event remains unverified. Connecting a merchant's own orders, tickets and policy document is the next step, not part of this build.
+- Evidence checks validate literal quotations and a rule's declared refund/deny effect. They do not prove that the model interpreted the complaint, item or policy correctly. The support agent reviews each proposal before approving a refund.
 - State lives in memory. If the server restarts, the demo run is gone (the payments still exist at PayPal); a production version needs a database for audit and reconciliation.
 - Sandbox only: PayPal's published test card, no real money.
 - New demo runs and live AI calls are rate-limited on the hosted demo.
